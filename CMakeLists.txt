@@ -15,7 +15,7 @@ install(DIRECTORY
         infrastructure/include/infrastructure
         domain/include/domain
 
-        DESTINATION include/voodoo-av
+        DESTINATION include/voodoo
 )
 
 target_link_libraries(voodoo_av
