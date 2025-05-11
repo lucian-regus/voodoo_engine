@@ -46,7 +46,12 @@ void split_path(const char* full_path, char* folder_out, size_t folder_size, cha
 char* generate_file_identity(const char* full_path) {
     struct stat statbuf;
     if (stat(full_path, &statbuf) != 0) {
-        log_message(LOG_LEVEL_ERROR, "stat() failed %s\n", full_path);
+        if (errno == ENOENT) {
+            log_message(LOG_LEVEL_WARN, "File %s was deleted or rotated.\n", full_path);
+        } else {
+            log_message(LOG_LEVEL_ERROR, "stat() failed for %s: %s\n", full_path, strerror(errno));
+        }
+
         return NULL;
     }
 

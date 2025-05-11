@@ -2,6 +2,7 @@
 #include "domain/logger.h"
 #include <sys/eventfd.h>
 
+#include <unistd.h>
 static GlobalContext* global_context = NULL;
 static pthread_mutex_t context_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -25,7 +26,6 @@ GlobalContext* get_context(void) {
         global_context->file_system_event_batch_queue = g_async_queue_new();
 
         global_context->loaded_plugins = NULL;
-        global_context->loaded_plugins_handles = NULL;
     }
 
     pthread_mutex_unlock(&context_lock);
@@ -42,8 +42,8 @@ void destroy_context(void) {
         g_async_queue_unref(global_context->file_system_event_batch_queue);
 
         g_list_free(global_context->loaded_plugins);
-        g_list_free(global_context->loaded_plugins_handles);
 
+        close(global_context->shutdown_event_fd);
         free(global_context);
         global_context = NULL;
         close_logger();

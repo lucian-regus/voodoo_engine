@@ -22,6 +22,7 @@ void build_events(FanotifyEventBatch* fanotify_event_batch) {
     struct fanotify_event_metadata *metadata;
     char procfd_path[PATH_MAX];
     char file_path[PATH_MAX];
+    struct fanotify_response response = {0};
 
     for (metadata = (struct fanotify_event_metadata *)fanotify_event_batch->fanotify_events_buffer;
          FAN_EVENT_OK(metadata, fanotify_event_batch->fanotify_events_buffer_len);
@@ -60,7 +61,10 @@ void build_events(FanotifyEventBatch* fanotify_event_batch) {
             if (strncmp(file_path, "/root", 5) == 0 ||
                 strncmp(file_path, "/proc", 5) == 0 ||
                 strncmp(file_path, "/sys", 4) == 0 ||
-                strncmp(file_path, "/dev", 4) == 0) {
+                strncmp(file_path, "/dev", 4) == 0 ||
+                strncmp(file_path, "/home", 5) == 0 ||
+                strncmp(file_path, "/var/log/journal", 16) == 0
+                ) {
                 close(event_fd);
                 continue;
             }
@@ -98,8 +102,16 @@ void build_events(FanotifyEventBatch* fanotify_event_batch) {
             if (strncmp(file_path, "/root", 5) == 0 ||
                 strncmp(file_path, "/proc", 5) == 0 ||
                 strncmp(file_path, "/sys", 4) == 0 ||
-                strncmp(file_path, "/dev", 4) == 0) {
+                strncmp(file_path, "/dev", 4) == 0 ||
+                strncmp(file_path, "/home", 5) == 0 ||
+                strncmp(file_path, "/var/log/journal", 16) == 0) {
+
+                response.fd = metadata->fd;
+                response.response = FAN_ALLOW;
+                write(fanotify_event_batch->global_context->fanotify_execution_fd, &response, sizeof(response));
                 close(metadata->fd);
+
+                //close(event_fd);
                 continue;
             }
 

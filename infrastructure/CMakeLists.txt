@@ -10,7 +10,7 @@ add_library(infrastructure STATIC
         src/plugin_manager.c
         src/helpers.c
         src/quarantine.c
-        include/infrastructure/quarantine.h
+        src/unix_control_server.c
 )
 
 target_include_directories(infrastructure PUBLIC

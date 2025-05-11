@@ -15,7 +15,6 @@ typedef struct {
     int mount_fd;
 
     GList* loaded_plugins;
-    GList* loaded_plugins_handles;
 } GlobalContext;
 
 GlobalContext* get_context(void);

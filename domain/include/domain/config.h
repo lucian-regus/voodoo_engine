@@ -8,3 +8,5 @@
 #define PLUGIN_DIR "/usr/lib/voodoo/plugins"
 #define QUARANTINE_DIR "/var/lib/voodoo/quarantine/"
 #define LOG_FILE "/var/log/voodoo/voodoo_engine.log"
+
+#define SOCKET_PATH "/tmp/voodoo.sock"

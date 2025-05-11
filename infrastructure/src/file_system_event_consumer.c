@@ -2,7 +2,6 @@
 #include "infrastructure/context.h"
 #include "infrastructure/plugin_interface.h"
 #include "infrastructure/helpers.h"
-#include "domain/logger.h"
 #include "infrastructure/quarantine.h"
 
 #include <unistd.h>
@@ -16,7 +15,6 @@ void process_event(FileSystemEvent* event) {
 
     char* file_identity = generate_file_identity(event->path);
     if (file_identity == NULL) {
-        log_message(LOG_LEVEL_ERROR,"Failed to generate file identity. -> %s\n", event->path);
         free(event);
 
         return;
@@ -75,7 +73,7 @@ void start_file_system_event_consumer(void) {
     }
     close(global_context->fanotify_execution_fd);
     close(global_context->mount_fd);
-    close(global_context->fanotify_execution_fd);
+    close(global_context->fanotify_creation_fd);
 
     g_thread_pool_free(thread_pool, FALSE, TRUE);
 }

@@ -66,7 +66,7 @@ void log_message(LogLevel level, const char *format, ...) {
     va_end(args);
 
     fprintf(log_file, "%s%s", prefix, message);
-    fprintf(stderr, "%s%s\n", prefix, message);
+    fprintf(stderr, "%s%s", prefix, message);
 
     fflush(log_file);
     fflush(stderr);

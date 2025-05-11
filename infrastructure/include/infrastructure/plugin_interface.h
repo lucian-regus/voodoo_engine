@@ -5,6 +5,7 @@ typedef struct {
     int (*init)(void);
     int (*evaluate_file)(char* filepath);
     void (*cleanup)(void);
+    void* handle;
 } Plugin;
 
 Plugin* get_plugin(void);

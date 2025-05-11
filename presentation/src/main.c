@@ -4,7 +4,7 @@
 #include "infrastructure/fanotify_event_consumer.h"
 #include "infrastructure/file_system_event_consumer.h"
 #include "infrastructure/plugin_manager.h"
-
+#include "infrastructure/unix_control_server.h"
 
 #include <unistd.h>
 #include <stdint.h>
@@ -12,6 +12,7 @@
 
 static void initialize() {
     setup_signal_handlers();
+    start_unix_control_server();
     load_plugins();
     start_file_system_monitoring();
 }
@@ -37,6 +38,7 @@ static void cleanup(GlobalContext *context) {
     g_async_queue_push(context->file_system_event_batch_queue, FILE_SYSTEM_EVENT_TERMINATE_SIGNAL);
     stop_file_system_event_consumer();
 
+    stop_unix_control_server();
     unload_plugins();
     destroy_context();
 }
