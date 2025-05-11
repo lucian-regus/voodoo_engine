@@ -111,7 +111,6 @@ void build_events(FanotifyEventBatch* fanotify_event_batch) {
                 write(fanotify_event_batch->global_context->fanotify_execution_fd, &response, sizeof(response));
                 close(metadata->fd);
 
-                //close(event_fd);
                 continue;
             }
 
