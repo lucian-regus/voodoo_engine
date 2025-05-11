@@ -55,15 +55,15 @@ char* generate_file_identity(const char* full_path) {
         return NULL;
     }
 
-    char* output_hash = malloc(50);
-    if (output_hash == NULL) {
+    char* file_identity = malloc(50);
+    if (file_identity == NULL) {
         log_message(LOG_LEVEL_ERROR, " generate_file_identity malloc failed\n");
         return NULL;
     }
 
-    snprintf(output_hash, 50, "%lu-%lu", (unsigned long)statbuf.st_dev, (unsigned long)statbuf.st_ino);
+    snprintf(file_identity, 100, "%lu-%lu-%ld", (unsigned long)statbuf.st_dev, (unsigned long)statbuf.st_ino, (long)statbuf.st_ctime);
 
-    return output_hash;
+    return file_identity;
 }
 
 int is_malware_allowed(GlobalContext* global_context, char* file_identity) {
