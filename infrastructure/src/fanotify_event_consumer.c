@@ -62,7 +62,6 @@ void build_events(FanotifyEventBatch* fanotify_event_batch) {
                 strncmp(file_path, "/proc", 5) == 0 ||
                 strncmp(file_path, "/sys", 4) == 0 ||
                 strncmp(file_path, "/dev", 4) == 0 ||
-                strncmp(file_path, "/home", 5) == 0 ||
                 strncmp(file_path, "/var/log/journal", 16) == 0
                 ) {
                 close(event_fd);
@@ -103,7 +102,6 @@ void build_events(FanotifyEventBatch* fanotify_event_batch) {
                 strncmp(file_path, "/proc", 5) == 0 ||
                 strncmp(file_path, "/sys", 4) == 0 ||
                 strncmp(file_path, "/dev", 4) == 0 ||
-                strncmp(file_path, "/home", 5) == 0 ||
                 strncmp(file_path, "/var/log/journal", 16) == 0) {
 
                 response.fd = metadata->fd;
