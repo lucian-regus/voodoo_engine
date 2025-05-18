@@ -18,117 +18,112 @@
 #include "infrastructure/context.h"
 #include "infrastructure/fanotify_event_batch.h"
 
-void build_events(FanotifyEventBatch* fanotify_event_batch) {
-    struct fanotify_event_metadata *metadata;
-    char procfd_path[PATH_MAX];
-    char file_path[PATH_MAX];
-    struct fanotify_response response = {0};
+static int should_ignore_path(const char* path) {
+    return strncmp(path, "/root", 5) == 0 ||
+           strncmp(path, "/proc", 5) == 0 ||
+           strncmp(path, "/sys", 4) == 0 ||
+           strncmp(path, "/dev", 4) == 0 ||
+           strncmp(path, "/var/log/journal", 16) == 0;
+}
 
-    for (metadata = (struct fanotify_event_metadata *)fanotify_event_batch->fanotify_events_buffer;
-         FAN_EVENT_OK(metadata, fanotify_event_batch->fanotify_events_buffer_len);
-         metadata = FAN_EVENT_NEXT(metadata, fanotify_event_batch->fanotify_events_buffer_len)) {
+static ssize_t get_file_path(int fd, char* buffer, size_t bufsize) {
+    char procfd_path[64];
+    snprintf(procfd_path, sizeof(procfd_path), "/proc/self/fd/%d", fd);
+    ssize_t len = readlink(procfd_path, buffer, bufsize - 1);
+    if (len != -1) buffer[len] = '\0';
 
-        int event_fd = -1;
-        const char *file_name = NULL;
-        size_t path_len = 0;
+    return len;
+}
+
+static void send_fanotify_response(int fanotify_fd, int metadata_fd, uint32_t response_flag) {
+    struct fanotify_response response = {
+        .fd = metadata_fd,
+        .response = response_flag
+    };
+    write(fanotify_fd, &response, sizeof(response));
+    close(metadata_fd);
+}
+
+static FileSystemEvent* create_filesystem_event(GlobalContext* ctx, uint64_t event_type, const char* path, int fd) {
+    FileSystemEvent* event = malloc(sizeof(FileSystemEvent));
+    if (!event) {
+        perror("malloc");
+        if (fd >= 0) close(fd);
+        exit(EXIT_FAILURE);
+    }
+    event->global_context = ctx;
+    event->event_type = event_type;
+    strncpy(event->path, path, sizeof(event->path) - 1);
+    event->path[sizeof(event->path) - 1] = '\0';
+    event->metadata_fd = fd;
+
+    return event;
+}
+
+void build_events(FanotifyEventBatch* batch) {
+    struct fanotify_event_metadata* metadata;
+    GlobalContext* global_context = batch->global_context;
+
+    for (metadata = (struct fanotify_event_metadata*)batch->fanotify_events_buffer;
+         FAN_EVENT_OK(metadata, batch->fanotify_events_buffer_len);
+         metadata = FAN_EVENT_NEXT(metadata, batch->fanotify_events_buffer_len)) {
 
         if (metadata->mask & FAN_CLOSE_WRITE) {
-            struct fanotify_event_info_fid *fid = (struct fanotify_event_info_fid *)(metadata + 1);
-            struct file_handle *file_handle = (struct file_handle *)fid->handle;
+            struct fanotify_event_info_fid* fid = (struct fanotify_event_info_fid*)(metadata + 1);
+            struct file_handle* handle = (struct file_handle*)fid->handle;
+            const char* file_name = handle->f_handle + handle->handle_bytes;
 
-            file_name = file_handle->f_handle + file_handle->handle_bytes;
-
-            event_fd = open_by_handle_at(fanotify_event_batch->global_context->mount_fd, file_handle, O_RDONLY);
+            int event_fd = open_by_handle_at(global_context->mount_fd, handle, O_RDONLY);
             if (event_fd == -1) {
                 if (errno == ESTALE) {
-                    log_message(LOG_LEVEL_WARN, "File handle is no longer valid. File has been deleted: %s\n", file_name);
+                    log_message(LOG_LEVEL_WARN, "File deleted before handle could open: %s\n", file_name);
                     continue;
                 }
                 perror("open_by_handle_at");
-                exit(EXIT_FAILURE);
+                continue;
             }
 
-            snprintf(procfd_path, sizeof(procfd_path), "/proc/self/fd/%d", event_fd);
-            path_len = readlink(procfd_path, file_path, sizeof(file_path) - 1);
-            if (path_len == -1) {
+            char path[PATH_MAX];
+            if (get_file_path(event_fd, path, sizeof(path)) == -1) {
                 perror("readlink");
                 close(event_fd);
                 exit(EXIT_FAILURE);
             }
 
-            file_path[path_len] = '\0';
-
-            if (strncmp(file_path, "/root", 5) == 0 ||
-                strncmp(file_path, "/proc", 5) == 0 ||
-                strncmp(file_path, "/sys", 4) == 0 ||
-                strncmp(file_path, "/dev", 4) == 0 ||
-                strncmp(file_path, "/var/log/journal", 16) == 0
-                ) {
+            if (should_ignore_path(path)) {
                 close(event_fd);
                 continue;
             }
 
-            strncat(file_path, "/", sizeof(file_path) - strlen(file_path) - 1);
-            strncat(file_path, file_name, sizeof(file_path) - strlen(file_path) - 1);
-
-            FileSystemEvent* event = malloc(sizeof(FileSystemEvent));
-            if (!event) {
-                perror("malloc");
-                close(event_fd);
-                exit(EXIT_FAILURE);
+            if (strlen(path) + strlen(file_name) + 2 < sizeof(path)) {
+                strncat(path, "/", sizeof(path) - strlen(path) - 1);
+                strncat(path, file_name, sizeof(path) - strlen(path) - 1);
             }
-            event->global_context = fanotify_event_batch->global_context;
-            event->event_type = metadata->mask;
-            strncpy(event->path, file_path, sizeof(event->path) - 1);
-            event->path[sizeof(event->path) - 1] = '\0';
 
-            g_async_queue_push(fanotify_event_batch->global_context->file_system_event_batch_queue, event);
-
+            FileSystemEvent* event = create_filesystem_event(global_context, metadata->mask, path, -1);
+            g_async_queue_push(global_context->file_system_event_batch_queue, event);
             close(event_fd);
         }
 
         if (metadata->mask & FAN_OPEN_EXEC_PERM && metadata->fd >= 0) {
-            snprintf(procfd_path, sizeof(procfd_path), "/proc/self/fd/%d", metadata->fd);
-            path_len = readlink(procfd_path, file_path, sizeof(file_path) - 1);
-            if (path_len == -1) {
+            char path[PATH_MAX];
+            if (get_file_path(metadata->fd, path, sizeof(path)) == -1) {
                 perror("readlink");
-                close(metadata->fd);
-                exit(EXIT_FAILURE);
-            }
-
-            file_path[path_len] = '\0';
-
-            if (strncmp(file_path, "/root", 5) == 0 ||
-                strncmp(file_path, "/proc", 5) == 0 ||
-                strncmp(file_path, "/sys", 4) == 0 ||
-                strncmp(file_path, "/dev", 4) == 0 ||
-                strncmp(file_path, "/var/log/journal", 16) == 0) {
-
-                response.fd = metadata->fd;
-                response.response = FAN_ALLOW;
-                write(fanotify_event_batch->global_context->fanotify_execution_fd, &response, sizeof(response));
-                close(metadata->fd);
-
+                send_fanotify_response(global_context->fanotify_execution_fd, metadata->fd, FAN_ALLOW);
                 continue;
             }
 
-            FileSystemEvent* event = malloc(sizeof(FileSystemEvent));
-            if (!event) {
-                perror("malloc");
-                close(metadata->fd);
-                exit(EXIT_FAILURE);
+            if (should_ignore_path(path)) {
+                send_fanotify_response(global_context->fanotify_execution_fd, metadata->fd, FAN_ALLOW);
+                continue;
             }
-            event->global_context = fanotify_event_batch->global_context;
-            event->event_type = metadata->mask;
-            strncpy(event->path, file_path, sizeof(event->path) - 1);
-            event->path[sizeof(event->path) - 1] = '\0';
-            event->metadata_fd = metadata->fd;
 
-            g_async_queue_push(fanotify_event_batch->global_context->file_system_event_batch_queue, event);
+            FileSystemEvent* event = create_filesystem_event(global_context, metadata->mask, path, metadata->fd);
+            g_async_queue_push(global_context->file_system_event_batch_queue, event);
         }
     }
 
-    free(fanotify_event_batch);
+    free(batch);
 }
 
 void start_raw_event_consumer(void) {
