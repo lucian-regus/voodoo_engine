@@ -63,6 +63,47 @@ static void handle_unload(int client_fd, char* arg) {
     }
 }
 
+static void handle_reload_nft(int client_fd) {
+    GlobalContext *ctx = get_context();
+    int found = 0;
+
+    if (!ctx->loaded_plugins) {
+        dprintf(client_fd, "No plugins loaded.\n");
+        return;
+    }
+
+    for (GList *p = ctx->loaded_plugins; p; p = p->next) {
+        Plugin *plg = (Plugin *)p->data;
+        if (strcmp(plg->name, "IP Blocker") == 0) {
+            found = 1;
+            break;
+        }
+    }
+
+    if (!found) {
+        dprintf(client_fd, "IP Blocker plugin not loaded.\n");
+        return;
+    }
+
+    if (system("sudo /usr/sbin/nft flush ruleset") != 0) {
+        log_message(LOG_LEVEL_ERROR, "[control_server] Failed to flush nftables ruleset");
+        dprintf(client_fd, "Error: Failed to flush nftables ruleset\n");
+        return;
+    }
+
+    char command[512];
+    snprintf(command, sizeof(command), "sudo /usr/sbin/nft -f %s", NFT_FILE_PATH);
+
+    if (system(command) != 0) {
+        log_message(LOG_LEVEL_ERROR, "[control_server] Failed to load nftables ruleset from file: %s", NFT_FILE_PATH);
+        dprintf(client_fd, "Error: Failed to load nftables ruleset from file\n");
+        return;
+    }
+
+    log_message(LOG_LEVEL_INFO, "[control_server] NFT ruleset reloaded successfully");
+    dprintf(client_fd, "NFT ruleset reloaded successfully.\n");
+}
+
 static void handle_client(int client_fd) {
     char buffer[1024] = {0};
     ssize_t len = read(client_fd, buffer, sizeof(buffer) - 1);
@@ -80,6 +121,9 @@ static void handle_client(int client_fd) {
     }
     else if (strcmp(command, "unload") == 0) {
         handle_unload(client_fd, arg);
+    }
+    else if (strcmp(command, "reload_nft") == 0) {
+        handle_reload_nft(client_fd);
     }
     else {
         dprintf(client_fd, "Unknown command: %s\n", command);

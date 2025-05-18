@@ -9,4 +9,5 @@
 #define QUARANTINE_DIR "/var/lib/voodoo/quarantine/"
 #define LOG_FILE "/var/log/voodoo/voodoo_engine.log"
 
+#define NFT_FILE_PATH "/var/lib/voodoo/blacklist.nft"
 #define SOCKET_PATH "/tmp/voodoo.sock"
