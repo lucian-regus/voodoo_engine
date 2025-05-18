@@ -4,60 +4,65 @@
 #include "infrastructure/helpers.h"
 #include "infrastructure/quarantine.h"
 
+#include <stdint.h>
 #include <unistd.h>
 #include <linux/fanotify.h>
 
+static void respond_to_fanotify(GlobalContext* ctx, int fd, uint32_t response_flag) {
+    struct fanotify_response response = {
+        .fd = fd,
+        .response = response_flag
+    };
+    write(ctx->fanotify_execution_fd, &response, sizeof(response));
+    close(fd);
+}
+
 void process_event(FileSystemEvent* event) {
-    struct fanotify_response response = {0};
-
-    int detected_malware_id = 0;
-    Plugin* detecting_plugin = NULL;
-
     char* file_identity = generate_file_identity(event->path);
-    if (file_identity == NULL) {
-        free(event);
+    if (!file_identity) {
+        if (event->event_type == FAN_OPEN_EXEC_PERM) {
+            respond_to_fanotify(event->global_context, event->metadata_fd, FAN_ALLOW);
+        }
 
+        free(event);
         return;
     }
 
-    if (is_malware_allowed(event->global_context, file_identity) == 1) {
+    if (is_malware_allowed(event->global_context, file_identity)) {
         if (event->event_type == FAN_OPEN_EXEC_PERM) {
-            response.fd = event->metadata_fd;
-            response.response = FAN_ALLOW;
-            write(event->global_context->fanotify_execution_fd, &response, sizeof(response));
-            close(event->metadata_fd);
+            respond_to_fanotify(event->global_context, event->metadata_fd, FAN_ALLOW);
         }
 
         free(file_identity);
         free(event);
-
         return;
     }
 
-    for (GList* l = event->global_context->loaded_plugins; l != NULL; l = l->next) {
-        Plugin* plugin = (Plugin*)l->data;
+    int malware_id = 0;
+    Plugin* detecting_plugin = NULL;
 
-        int scan_result_id = plugin->evaluate_file(event->path);
-        if (scan_result_id) {
-            detected_malware_id = scan_result_id;
+    for (GList* node = event->global_context->loaded_plugins; node != NULL; node = node->next) {
+        Plugin* plugin = (Plugin*)node->data;
+        int result = plugin->evaluate_file(event->path);
+        if (result != 0) {
+            malware_id = result;
             detecting_plugin = plugin;
             break;
         }
     }
 
+
     if (event->event_type == FAN_OPEN_EXEC_PERM) {
-        response.fd = event->metadata_fd;
-        response.response = detected_malware_id ? FAN_DENY : FAN_ALLOW;
-        write(event->global_context->fanotify_execution_fd, &response, sizeof(response));
-        close(event->metadata_fd);
+        respond_to_fanotify(event->global_context, event->metadata_fd,
+                            malware_id ? FAN_DENY : FAN_ALLOW);
     }
 
-    if (detected_malware_id) {
-        quarantine_file(file_identity, event->path, detecting_plugin->name, detected_malware_id);
+    if (malware_id) {
+        quarantine_file(file_identity, event->path, detecting_plugin->name, malware_id);
     }
 
-    free(event);
     free(file_identity);
+    free(event);
 }
 
 void start_file_system_event_consumer(void) {
