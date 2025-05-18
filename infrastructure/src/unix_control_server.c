@@ -96,7 +96,7 @@ void control_server_thread() {
     int server_fd;
 
     if ((server_fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-        log_message(LOG_LEVEL_ERROR, "socket() failed: %s", strerror(errno));
+        log_message(LOG_LEVEL_ERROR, "socket() failed: %s.\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
 
@@ -106,13 +106,13 @@ void control_server_thread() {
     unlink(SOCKET_PATH);
 
     if (bind(server_fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
-        log_message(LOG_LEVEL_ERROR, "bind() failed: %s", strerror(errno));
+        log_message(LOG_LEVEL_ERROR, "bind() failed: %s.\n", strerror(errno));
         close(server_fd);
         exit(EXIT_FAILURE);
     }
 
     if (listen(server_fd, 5) == -1) {
-        log_message(LOG_LEVEL_ERROR, "listen() failed: %s", strerror(errno));
+        log_message(LOG_LEVEL_ERROR, "listen() failed: %s.\n", strerror(errno));
         close(server_fd);
         exit(EXIT_FAILURE);
     }
@@ -133,7 +133,7 @@ void control_server_thread() {
         if (pfd.revents & POLLIN) {
             int client_fd = accept(server_fd, NULL, NULL);
             if (client_fd == -1) {
-                log_message(LOG_LEVEL_ERROR, "accept() failed: %s", strerror(errno));
+                log_message(LOG_LEVEL_ERROR, "accept() failed: %s.\n", strerror(errno));
                 continue;
             }
 

@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <linux/fanotify.h>
 
+#include "domain/logger.h"
+
 static void respond_to_fanotify(GlobalContext* ctx, int fd, uint32_t response_flag) {
     struct fanotify_response response = {
         .fd = fd,
@@ -59,6 +61,7 @@ void process_event(FileSystemEvent* event) {
 
     if (malware_id) {
         quarantine_file(file_identity, event->path, detecting_plugin->name, malware_id);
+        log_message(LOG_LEVEL_INFO, "%s quarantined.\n", event->path);
     }
 
     free(file_identity);

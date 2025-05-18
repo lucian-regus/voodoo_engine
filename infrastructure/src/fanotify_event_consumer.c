@@ -23,6 +23,7 @@ static int should_ignore_path(const char* path) {
            strncmp(path, "/proc", 5) == 0 ||
            strncmp(path, "/sys", 4) == 0 ||
            strncmp(path, "/dev", 4) == 0 ||
+           strncmp(path, "/var/lib/postgresql", 19) == 0 ||
            strncmp(path, "/var/log/journal", 16) == 0;
 }
 

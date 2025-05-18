@@ -9,7 +9,7 @@ void exit_on_error(DatabaseContext* database_context, PGconn* connection, const 
     const char* safe_context = context ? context : "Unknown error";
     const char* pg_error = connection ? PQerrorMessage(connection) : "No connection context";
 
-    log_message(LOG_LEVEL_ERROR, "%s:  %s", safe_context, pg_error);
+    log_message(LOG_LEVEL_ERROR, "%s:  %s\n", safe_context, pg_error);
 
     g_async_queue_push(database_context->connections, connection);
 
@@ -21,7 +21,7 @@ void exit_on_error(DatabaseContext* database_context, PGconn* connection, const 
 DatabaseContext* database_context_create(void) {
     DatabaseContext* database_context = malloc(sizeof(DatabaseContext));
     if (!database_context) {
-        log_message(LOG_LEVEL_ERROR, "Failed to allocate memory for DatabaseContext");
+        log_message(LOG_LEVEL_ERROR, "Failed to allocate memory for DatabaseContext.\n");
         exit(EXIT_FAILURE);
     }
 
@@ -132,6 +132,4 @@ void run_non_query(DatabaseContext* database_context, const char *query, GList *
 
     PQclear(response);
     g_async_queue_push(database_context->connections, connection);
-
-    log_message(LOG_LEVEL_DEBUG, "Insert complete.");
 }
