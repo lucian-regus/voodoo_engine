@@ -47,6 +47,9 @@ static const char* level_to_string(LogLevel level) {
 void log_message(LogLevel level, const char *format, ...) {
     pthread_mutex_lock(&log_mutex);
 
+    if (level == LOG_LEVEL_ERROR)
+        return;
+
     if (!log_file) return;
 
     struct timeval tv;
